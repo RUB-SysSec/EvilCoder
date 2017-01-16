@@ -1,0 +1,256 @@
+<?xml version="1.0"?>
+<project name="Joern" default="jar" basedir=".">
+
+  <property environment="env"/>
+  <property name="src.dir" location="src" />
+  <property name="build.dir" location="bin" />
+  <property name="lib.dir" location="lib" />
+  <property name="test.dir" location="src" />
+  <property name="test.report.dir" location="testreport" />
+
+  <property name="neo4j.lib.dir" location="/home/user/neo4j-community-2.1.6/lib" />
+  <property name="neo4j.gremlin.dir" location="/home/user/neo4j-community-2.1.6/plugins/gremlin-plugin" />
+
+  <!-- Junit class path -->
+  <path id="junit.class.path">
+    <pathelement location="${lib.dir}/junit.jar" />
+    <pathelement location="${lib.dir}/hamcrest-core-1.2.jar" />
+    <pathelement location="${lib.dir}/geronimo-jta_1.1_spec-1.1.1.jar"/>
+    <pathelement location="${build.dir}" />
+  </path>
+
+  <!-- Add jars to the classpath -->
+  <path id="joern.classpath">
+    <pathelement location="bin"/>
+    <path refid="junit.class.path"/>
+    <pathelement location="${lib.dir}/antlr4-runtime-4.2.1-SNAPSHOT.jar"/>
+	<pathelement location="${lib.dir}/antlr4-annotations-4.2.1-SNAPSHOT.jar"/>
+	<pathelement location="${lib.dir}/commons-cli-1.2.jar"/>
+    <pathelement location="${lib.dir}/hamcrest-core-1.3.jar"/>
+    <pathelement location="${lib.dir}/lucene-core-3.6.2.jar"/>
+    <pathelement location="${lib.dir}/neo4j-kernel-2.1.6.jar"/>
+    <pathelement location="${lib.dir}/neo4j-lucene-index-2.1.6.jar"/>
+	<pathelement location="${lib.dir}/neo4j-primitive-collections-2.1.6.jar"/>
+
+<!--
+    <fileset dir="${neo4j.lib.dir}" includes="*.jar" />
+    <fileset dir="${neo4j.gremlin.dir}" includes="*.jar" />
+-->
+	<pathelement location="${neo4j.lib.dir}/neo4j-cypher-2.1.6.jar" />
+	<pathelement location="${neo4j.lib.dir}/scala-library-2.10.4.jar" />
+	<pathelement location="${neo4j.lib.dir}/neo4j-cypher-compiler-2.1-2.1.6.jar" />
+	<pathelement location="${neo4j.lib.dir}/neo4j-cypher-commons-2.1.6.jar" />
+	<pathelement location="${neo4j.lib.dir}/parboiled-core-1.1.6.jar" />
+	<pathelement location="${neo4j.lib.dir}/parboiled-scala_2.10-1.1.6.jar" />
+	<pathelement location="${neo4j.lib.dir}/concurrentlinkedhashmap-lru-1.3.1.jar" />
+	<pathelement location="${neo4j.lib.dir}/neo4j-cypher-compiler-2.0-2.0.3.jar" />
+	<pathelement location="${neo4j.lib.dir}/neo4j-cypher-compiler-1.9-2.0.3.jar" />
+
+
+	<pathelement location="${neo4j.gremlin.dir}/blueprints-core-2.5.0.jar" />
+	<pathelement location="${neo4j.gremlin.dir}/pipes-2.5.0.jar" />
+	<pathelement location="${neo4j.gremlin.dir}/gremlin-java-2.5.0.jar" />
+	<pathelement location="${neo4j.gremlin.dir}/gremlin-groovy-2.5.0.jar" />
+	<pathelement location="${neo4j.gremlin.dir}/blueprints-neo4j2-graph-2.5.0.jar" />
+	<pathelement location="${neo4j.gremlin.dir}/commons-configuration-1.6.jar" />
+
+<!--
+	<pathelement location="${neo4j.gremlin.dir}/groovy-1.8.9.jar" />
+-->
+  </path>
+
+  <target name="clean">
+    <delete dir="${build.dir}" />
+    <delete dir="${test.report.dir}" />
+  </target>
+
+  <target name="makedir">
+    <mkdir dir="${build.dir}" />
+    <mkdir dir="${test.report.dir}" />
+  </target>
+
+  <target name="compile" depends="makedir">
+    <property name="myclasspath" refid="joern.classpath"/>
+    <echo message="Classpath = ${myclasspath}"/>
+
+    <javac srcdir="${src.dir}" destdir="${build.dir}" optimize="off" debug="true" includeantruntime="false">
+<!--
+    <javac srcdir="${src.dir}" destdir="${build.dir}" includeantruntime="false">
+-->
+
+<compilerarg line="-Xmaxerrs 1"/>
+<compilerarg value="-Xlint:deprecation"/>
+<!--
+
+-->
+	<src path="src"/>
+	<classpath refid="joern.classpath"/>
+    </javac>
+  </target>
+
+  <target name="jar" depends="clean,makedir,compile">
+    <jar destfile="${build.dir}/joern.jar"
+	 basedir="${build.dir}"
+	 includes="**/*.class">
+      <manifest>
+	<attribute name="Main-Class" value="tools.index.IndexMain" />
+      </manifest>
+      <fileset dir="${build.dir}" includes="**/*.class" />
+      <zipgroupfileset dir="${lib.dir}" includes="**/*.jar" />
+    </jar>
+  </target>
+
+<!--  <target name="tools" depends="icfg,argumentTainter"> -->
+  <target name="tools" depends="icfg,argumentTainter,init_glibc_data_trans, taint_all, get_call_graph, find_all_function_pointers, remove_duplicated_edges, replace_member_edges, find_data_paths">
+  </target>
+
+  <target name="prepareTestDB" depends="tools">
+    <exec executable="${env.SHELL}">
+      <arg value="rebuildTestDB.sh"/>
+    </exec>
+  </target>
+
+  <target name="test" depends="jar, prepareTestDB">
+    <junit printsummary="yes" haltonfailure="false">
+      <classpath refid="joern.classpath" />
+
+      <formatter type="xml" />
+
+      <batchtest fork="yes" todir="${test.report.dir}" skipnontests="true">
+	<fileset dir="${test.dir}">
+	  <include name="tests/**/*.java" />
+	</fileset>
+      </batchtest>
+    </junit>
+
+    <junitreport todir="${test.report.dir}">
+      <fileset dir="${test.report.dir}">
+	<include name="TEST-*.xml"/>
+      </fileset>
+      <report format="frames" todir="${test.report.dir}/html"/>
+    </junitreport>
+
+  </target>
+
+  <target name="icfg" depends="compile">
+    <jar destfile="${build.dir}/icfg.jar"
+	 basedir="${build.dir}"
+	 includes="**/*.class">
+      <manifest>
+	<attribute name="Main-Class" value="tools.icfg.ICFGMain" />
+      </manifest>
+    <fileset dir="${build.dir}" includes="**/*.class" />
+    <zipgroupfileset dir="${lib.dir}" includes="**/*.jar" />
+    </jar>
+  </target>
+
+  <target name="argumentTainter" depends="compile">
+    <jar destfile="${build.dir}/argumentTainter.jar"
+	 basedir="${build.dir}"
+	 includes="**/*.class">
+      <manifest>
+	<attribute name="Main-Class" value="tools.argumentTainter.ArgumentTainterMain" />
+      </manifest>
+      <fileset dir="${build.dir}" includes="**/*.class" />
+      <zipgroupfileset dir="${lib.dir}" includes="**/*.jar" />
+    </jar>
+  </target>
+
+  <target name="minimal_example" depends="compile">
+    <jar destfile="${build.dir}/minimal_example.jar"
+	 basedir="${build.dir}"
+	 includes="**/*.class">
+      <manifest>
+	<attribute name="Main-Class" value="tools.minimal_example.Minimal_example_main" />
+      </manifest>
+      <fileset dir="${build.dir}" includes="**/*.class" />
+      <zipgroupfileset dir="${lib.dir}" includes="**/*.jar" />
+    </jar>
+  </target>
+
+  <target name="replace_member_edges" depends="compile">
+    <jar destfile="${build.dir}/replace_member_edges.jar"
+	 basedir="${build.dir}"
+	 includes="**/*.class">
+      <manifest>
+	<attribute name="Main-Class" value="tools.data_flow.Replace_member_edges" />
+      </manifest>
+      <fileset dir="${build.dir}" includes="**/*.class" />
+      <zipgroupfileset dir="${lib.dir}" includes="**/*.jar" />
+    </jar>
+  </target>
+
+  <target name="remove_duplicated_edges" depends="compile">
+    <jar destfile="${build.dir}/remove_duplicated_edges.jar"
+	 basedir="${build.dir}"
+	 includes="**/*.class">
+      <manifest>
+	<attribute name="Main-Class" value="tools.data_flow.Remove_duplicated_edges" />
+      </manifest>
+      <fileset dir="${build.dir}" includes="**/*.class" />
+      <zipgroupfileset dir="${lib.dir}" includes="**/*.jar" />
+    </jar>
+  </target>
+
+  <target name="find_all_function_pointers" depends="compile">
+    <jar destfile="${build.dir}/find_all_function_pointers.jar"
+	 basedir="${build.dir}"
+	 includes="**/*.class">
+      <manifest>
+	<attribute name="Main-Class" value="tools.data_flow.Find_all_function_pointers" />
+      </manifest>
+      <fileset dir="${build.dir}" includes="**/*.class" />
+      <zipgroupfileset dir="${lib.dir}" includes="**/*.jar" />
+    </jar>
+  </target>
+
+  <target name="get_call_graph" depends="compile">
+    <jar destfile="${build.dir}/get_call_graph.jar"
+	 basedir="${build.dir}"
+	 includes="**/*.class">
+      <manifest>
+	<attribute name="Main-Class" value="tools.data_flow.Get_call_graph" />
+      </manifest>
+      <fileset dir="${build.dir}" includes="**/*.class" />
+      <zipgroupfileset dir="${lib.dir}" includes="**/*.jar" />
+    </jar>
+  </target>
+
+  <target name="taint_all" depends="compile">
+    <jar destfile="${build.dir}/taint_all.jar"
+	 basedir="${build.dir}"
+	 includes="**/*.class">
+      <manifest>
+	<attribute name="Main-Class" value="tools.data_flow.Taint_all" />
+      </manifest>
+      <fileset dir="${build.dir}" includes="**/*.class" />
+      <zipgroupfileset dir="${lib.dir}" includes="**/*.jar" />
+    </jar>
+  </target>
+
+  <target name="init_glibc_data_trans" depends="compile">
+    <jar destfile="${build.dir}/init_glibc_data_trans.jar"
+	 basedir="${build.dir}"
+	 includes="**/*.class">
+      <manifest>
+	<attribute name="Main-Class" value="tools.data_flow.Init_glibc_data_trans" />
+      </manifest>
+      <fileset dir="${build.dir}" includes="**/*.class" />
+      <zipgroupfileset dir="${lib.dir}" includes="**/*.jar" />
+    </jar>
+  </target>
+
+  <target name="find_data_paths" depends="compile">
+    <jar destfile="${build.dir}/find_data_paths.jar"
+	 basedir="${build.dir}"
+	 includes="**/*.class">
+      <manifest>
+	<attribute name="Main-Class" value="tools.data_flow.Find_data_paths" />
+      </manifest>
+      <fileset dir="${build.dir}" includes="**/*.class" />
+      <zipgroupfileset dir="${lib.dir}" includes="**/*.jar" />
+    </jar>
+  </target>
+
+
+</project>
